@@ -1,0 +1,21 @@
+{
+	"name": "overlu/mini-captcha",
+	"type": "package",
+	"description": "Mini Captcha Package",
+	"keywords": ["mini", "captcha", "Security", "swoole"],
+	"license": "MIT",
+	"require": {
+		"php": "^7.4",
+		"ext-gd": "*",
+		"overlu/mini-framework": "~2.12.0",
+		"overlu/mini-image": "~1.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"MiniCaptcha\\": "src/"
+		},
+		"files": [
+			"src/helpers.php"
+		]
+	}
+}
