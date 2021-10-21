@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace MiniCaptcha;
 
 use Exception;
+use Mini\Facades\Response;
 
 /**
  * Class CaptchaController
@@ -23,13 +24,9 @@ class CaptchaController
      * @return array|mixed
      * @throws Exception
      */
-    public function getCaptcha(Captcha $captcha, $config = 'default'): array
+    public function getCaptcha(Captcha $captcha, $config = 'default')
     {
-        if (ob_get_contents()) {
-            ob_clean();
-        }
-
-        return $captcha->create($config);
+        return $captcha->create(\MiniCaptcha\Facades\Captcha::getCk(), $config);
     }
 
     /**
@@ -40,8 +37,8 @@ class CaptchaController
      * @return array|mixed
      * @throws Exception
      */
-    public function getCaptchaApi(Captcha $captcha, $config = 'default'): array
+    public function getCaptchaApi(Captcha $captcha, $config = 'default')
     {
-        return $captcha->create($config, true);
+        return $captcha->create(\MiniCaptcha\Facades\Captcha::getCk(), $config, true);
     }
 }

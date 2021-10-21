@@ -17,7 +17,7 @@ class CaptchaApi extends Rule
     protected string $message = "The :attribute is wrong";
 
     /** @var array */
-    protected array $fillableParams = ['key', 'config'];
+    protected array $fillableParams = ['key', 'ck', 'config'];
 
     /**
      * Check the $value is valid
@@ -28,9 +28,6 @@ class CaptchaApi extends Rule
      */
     public function check($value): bool
     {
-        if (!$config = $this->parameter('config')) {
-            $config = 'default';
-        }
-        return captcha_api_check($value, $this->parameter('key'), $config);
+        return captcha_api_check($value, $this->parameter('key'), $this->parameter('ck', ''), $this->parameter('config', 'default'));
     }
 }

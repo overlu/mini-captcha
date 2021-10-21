@@ -7,53 +7,60 @@ declare(strict_types=1);
 
 use Intervention\Image\ImageManager;
 use Mini\Contracts\Container\BindingResolutionException;
+use Mini\Support\HtmlString;
 
 if (!function_exists('captcha')) {
     /**
+     * @param string $ck
      * @param string $config
-     * @return array|ImageManager|mixed
-     * @throws Exception
+     * @param bool $api
+     * @return mixed
+     * @throws BindingResolutionException
      */
-    function captcha(string $config = 'default')
+    function captcha(string $ck = '', string $config = 'default', bool $api = false)
     {
-        return app('captcha')->create($config);
+        return app('captcha')->create($ck, $config, $api);
     }
 }
 
 if (!function_exists('captcha_src')) {
     /**
+     * @param string $ck
      * @param string $config
      * @return string
      * @throws BindingResolutionException
      */
-    function captcha_src(string $config = 'default'): string
+    function captcha_src(string $ck = '', string $config = 'default'): string
     {
-        return app('captcha')->src($config);
+        return app('captcha')->src($ck, $config);
     }
 }
 
 if (!function_exists('captcha_img')) {
 
     /**
+     * @param string $ck
      * @param string $config
-     * @return string
+     * @param array $attrs
+     * @return HtmlString
      * @throws BindingResolutionException
      */
-    function captcha_img(string $config = 'default'): string
+    function captcha_img(string $ck = '', string $config = 'default', array $attrs = []): HtmlString
     {
-        return app('captcha')->img($config);
+        return app('captcha')->img($ck, $config, $attrs);
     }
 }
 
 if (!function_exists('captcha_check')) {
     /**
      * @param string $value
+     * @param string $ck
      * @return bool
      * @throws BindingResolutionException
      */
-    function captcha_check(string $value): bool
+    function captcha_check(string $value, string $ck = ''): bool
     {
-        return app('captcha')->check($value);
+        return app('captcha')->check($value, $ck);
     }
 }
 
@@ -61,12 +68,13 @@ if (!function_exists('captcha_api_check')) {
     /**
      * @param string $value
      * @param string $key
+     * @param string $ck
      * @param string $config
      * @return bool
      * @throws BindingResolutionException
      */
-    function captcha_api_check(string $value, string $key, string $config = 'default'): bool
+    function captcha_api_check(string $value, string $key, string $ck = '', string $config = 'default'): bool
     {
-        return app('captcha')->check_api($value, $key, $config);
+        return app('captcha')->check_api($value, $key, $ck, $config);
     }
 }

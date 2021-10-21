@@ -11,8 +11,13 @@ use Exception;
 use Mini\Contracts\Container\BindingResolutionException;
 use Mini\Facades\Config;
 use Mini\Facades\Hash;
+use Mini\Facades\Provider;
+use Mini\Facades\Request;
+use Mini\Facades\Response;
 use Mini\Facades\Session;
 use Mini\Filesystem\File;
+use Mini\Service\HttpMessage\Stream\SwooleStream;
+use Mini\Session\SessionServiceProvider;
 use Mini\Support\Str;
 use Mini\Support\HtmlString;
 use Intervention\Image\Gd\Font;
@@ -20,6 +25,7 @@ use Intervention\Image\Image;
 use Intervention\Image\ImageManager;
 use Mini\Facades\Cache;
 use Mini\Facades\Crypt;
+use MiniCaptcha\Exceptions\CaptchaException;
 
 /**
  * Class Captcha
@@ -43,14 +49,19 @@ class Captcha
     protected Image $image;
 
     /**
-     * @var array
+     * @var string
      */
-    protected iterable $backgrounds = [];
+    protected string $captcha_key = '';
 
     /**
      * @var array
      */
-    protected iterable $fonts = [];
+    protected array $backgrounds = [];
+
+    /**
+     * @var array
+     */
+    protected array $fonts = [];
 
     /**
      * @var array
@@ -168,6 +179,15 @@ class Captcha
         $this->imageManager = app('image');
         $this->characters = config('captcha.characters', ['1', '2', '3', '4', '6', '7', '8', '9']);
         $this->fontsDirectory = config('captcha.fontsDirectory', dirname(__DIR__) . '/assets/fonts');
+        $backgrounds = \Mini\Facades\File::files(__DIR__ . '/../assets/backgrounds');
+        foreach ($backgrounds as $background) {
+            $this->backgrounds[] = $background->getPathname();
+        }
+        $fonts = \Mini\Facades\File::files($this->fontsDirectory);
+        foreach ($fonts as $font) {
+            $this->fonts[] = $font->getPathName();;
+        }
+
     }
 
     /**
@@ -191,23 +211,11 @@ class Captcha
      * @return array|mixed
      * @throws Exception
      */
-    public function create(string $config = 'default', bool $api = false): array
+    public function create(string $ck = '', string $config = 'default', bool $api = false)
     {
-        $this->backgrounds = \Mini\Facades\File::files(__DIR__ . '/../assets/backgrounds');
-        $this->fonts = \Mini\Facades\File::files($this->fontsDirectory);
-
-        if (version_compare(app()->version(), '5.5.0', '>=')) {
-            $this->fonts = array_map(static function ($file) {
-                /* @var File $file */
-                return $file->getPathName();
-            }, $this->fonts);
-        }
-
-        $this->fonts = array_values($this->fonts); //reset fonts array index
-
         $this->configure($config);
 
-        $generator = $this->generate();
+        $generator = $this->generate($ck);
         $this->text = $generator['value'];
 
         $this->canvas = $this->imageManager->canvas(
@@ -215,7 +223,6 @@ class Captcha
             $this->height,
             $this->bgColor
         );
-
         if ($this->bgImage) {
             $this->image = $this->imageManager->make($this->background())->resize(
                 $this->width,
@@ -245,14 +252,51 @@ class Captcha
         }
 
         if ($api) {
-            Cache::put($this->get_cache_key($generator['key']), $generator['value'], $this->expire);
+            Cache::put($this->get_cache_key($generator['key'], $ck), $generator['value'], $this->expire);
         }
 
         return $api ? [
             'sensitive' => $generator['sensitive'],
             'key' => $generator['key'],
             'img' => $this->image->encode('data-url')->encoded
-        ] : $this->image->response('png', $this->quality);
+        ] : $this->response('png');
+    }
+
+    /**
+     * @param string $captcha_key
+     * @return string
+     * @throws CaptchaException
+     */
+    public function getCk(string $captcha_key = ''): string
+    {
+        if ($captcha_key) {
+            return $captcha_key;
+        }
+        if (Provider::serviceProviderWasBooted(SessionServiceProvider::class)) {
+            $captcha_key = (string)Session::getId();
+            if (!$captcha_key) {
+                throw new CaptchaException('create captcha: no session id');
+            }
+        } else {
+            $captcha_key = (string)Request::header('ck', Request::input('ck'));
+            if (!$captcha_key) {
+                throw new CaptchaException('create captcha: no [ck] param');
+            }
+        }
+        return $captcha_key;
+    }
+
+    /**
+     * @param string $format
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    protected function response(string $format = 'png'): \Psr\Http\Message\ResponseInterface
+    {
+        $this->image->encode($format, $this->quality);
+        $data = $this->image->getEncoded();
+        $mime = finfo_buffer(finfo_open(FILEINFO_MIME_TYPE), $data);
+        $length = strlen($data);
+        return Response::withAddedHeader('Content-Type', $mime)->withAddedHeader('Content-Length', $length)->withBody(new SwooleStream((string)$data));
     }
 
     /**
@@ -268,11 +312,11 @@ class Captcha
 
     /**
      * Generate captcha text
-     *
+     * @param string $ck
      * @return array
-     * @throws Exception
+     * @throws CaptchaException
      */
-    protected function generate(): array
+    protected function generate(string $ck = ''): array
     {
         $characters = is_string($this->characters) ? str_split($this->characters) : $this->characters;
 
@@ -297,11 +341,11 @@ class Captcha
             $hash = Crypt::encrypt($hash);
         }
 
-        Session::put('captcha', [
+        Cache::put('captcha.' . $this->getCk($ck), [
             'sensitive' => $this->sensitive,
             'key' => $hash,
             'encrypt' => $this->encrypt
-        ]);
+        ], $this->expire);
 
         return [
             'value' => $bag,
@@ -419,15 +463,16 @@ class Captcha
      * @param string $value
      * @return bool
      */
-    public function check(string $value): bool
+    public function check(string $value, string $ck = ''): bool
     {
-        if (!Session::has('captcha')) {
+        $captcha_key = $this->getCk($ck);
+        if (!$cache = Cache::get('captcha.' . $captcha_key)) {
             return false;
         }
 
-        $key = Session::get('captcha.key');
-        $sensitive = Session::get('captcha.sensitive');
-        $encrypt = Session::get('captcha.encrypt');
+        $key = $cache['key'] ?? null;
+        $sensitive = $cache['sensitive'] ?? null;
+        $encrypt = $cache['encrypt'] ?? null;
 
         if (!$sensitive) {
             $value = Str::lower($value);
@@ -439,7 +484,7 @@ class Captcha
         $check = Hash::check($value, $key);
         // if verify pass,remove session
         if ($check) {
-            Session::remove('captcha');
+            Cache::delete('captcha.' . $captcha_key);
         }
 
         return $check;
@@ -447,13 +492,14 @@ class Captcha
 
     /**
      * Returns the md5 short version of the key for cache
-     *
      * @param string $key
+     * @param string $ck
      * @return string
+     * @throws CaptchaException
      */
-    protected function get_cache_key(string $key): string
+    protected function get_cache_key(string $key, string $ck = ''): string
     {
-        return 'captcha_' . md5($key);
+        return 'captcha.' . $this->getCk($ck) . '.' . md5($key);
     }
 
     /**
@@ -464,9 +510,9 @@ class Captcha
      * @param string $config
      * @return bool
      */
-    public function check_api(string $value, string $key, string $config = 'default'): bool
+    public function check_api(string $value, string $key, string $ck = '', string $config = 'default'): bool
     {
-        if (!Cache::pull($this->get_cache_key($key))) {
+        if (!Cache::pull($this->get_cache_key($key, $ck))) {
             return false;
         }
 
@@ -483,15 +529,14 @@ class Captcha
 
     /**
      * Generate captcha image source
-     *
+     * @param string $ck
      * @param string $config
      * @return string
      * @throws Exception
-     * @throws Exception
      */
-    public function src(string $config = 'default'): string
+    public function src(string $ck = '', string $config = 'default'): string
     {
-        return url('captcha/' . $config) . '?' . Str::random(8);
+        return url('captcha/' . $config) . '?ck=' . $this->getCk($ck) . '&rd=' . Str::random(8);
     }
 
     /**
@@ -503,7 +548,7 @@ class Captcha
      * @return HtmlString
      * @throws Exception
      */
-    public function img(string $config = 'default', array $attrs = []): HtmlString
+    public function img(string $ck = '', string $config = 'default', array $attrs = []): HtmlString
     {
         $attrs_str = '';
         foreach ($attrs as $attr => $value) {
@@ -514,6 +559,6 @@ class Captcha
 
             $attrs_str .= $attr . '="' . $value . '" ';
         }
-        return new HtmlString('<img src="' . $this->src($config) . '" ' . trim($attrs_str) . '>');
+        return new HtmlString('<img src="' . $this->src($ck, $config) . '" ' . trim($attrs_str) . '>');
     }
 }

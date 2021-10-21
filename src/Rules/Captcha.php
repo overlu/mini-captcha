@@ -16,6 +16,9 @@ class Captcha extends Rule
     /** @var string */
     protected string $message = "The :attribute is wrong";
 
+    /** @var array */
+    protected array $fillableParams = ['ck'];
+
     /**
      * Check the $value is valid
      *
@@ -25,6 +28,6 @@ class Captcha extends Rule
      */
     public function check($value): bool
     {
-        return captcha_check($value);
+        return captcha_check($value, $this->parameter('ck', ''));
     }
 }
