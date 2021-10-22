@@ -13,13 +13,13 @@ if (!function_exists('captcha')) {
     /**
      * @param string $ck
      * @param string $config
-     * @param bool $api
+     * @param bool $base64
      * @return mixed
      * @throws BindingResolutionException
      */
-    function captcha(string $ck = '', string $config = 'default', bool $api = false)
+    function captcha(string $ck = '', string $config = 'default', bool $base64 = false)
     {
-        return app('captcha')->create($ck, $config, $api);
+        return app('captcha')->create($ck, $config, $base64);
     }
 }
 
@@ -55,26 +55,12 @@ if (!function_exists('captcha_check')) {
     /**
      * @param string $value
      * @param string $ck
+     * @param bool $removeSession
      * @return bool
      * @throws BindingResolutionException
      */
-    function captcha_check(string $value, string $ck = ''): bool
+    function captcha_check(string $value, string $ck = '', bool $removeSession = true): bool
     {
-        return app('captcha')->check($value, $ck);
-    }
-}
-
-if (!function_exists('captcha_api_check')) {
-    /**
-     * @param string $value
-     * @param string $key
-     * @param string $ck
-     * @param string $config
-     * @return bool
-     * @throws BindingResolutionException
-     */
-    function captcha_api_check(string $value, string $key, string $ck = '', string $config = 'default'): bool
-    {
-        return app('captcha')->check_api($value, $key, $ck, $config);
+        return app('captcha')->check($value, $ck, $removeSession);
     }
 }

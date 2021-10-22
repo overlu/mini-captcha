@@ -8,7 +8,7 @@ declare(strict_types=1);
 namespace MiniCaptcha;
 
 use Exception;
-use Mini\Facades\Response;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * Class CaptchaController
@@ -21,23 +21,23 @@ class CaptchaController
      *
      * @param Captcha $captcha
      * @param string $config
-     * @return array|mixed
+     * @return ResponseInterface
      * @throws Exception
      */
-    public function getCaptcha(Captcha $captcha, $config = 'default')
+    public function getCaptcha(Captcha $captcha, $config = 'default'): ResponseInterface
     {
         return $captcha->create(\MiniCaptcha\Facades\Captcha::getCk(), $config);
     }
 
     /**
-     * get CAPTCHA api
+     * get CAPTCHA base64 data
      *
      * @param Captcha $captcha
      * @param string $config
-     * @return array|mixed
+     * @return string
      * @throws Exception
      */
-    public function getCaptchaApi(Captcha $captcha, $config = 'default')
+    public function getCaptchaBase64(Captcha $captcha, $config = 'default'): string
     {
         return $captcha->create(\MiniCaptcha\Facades\Captcha::getCk(), $config, true);
     }

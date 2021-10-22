@@ -10,12 +10,11 @@ namespace MiniCaptcha;
 use Exception;
 use Mini\Contracts\Container\BindingResolutionException;
 use Mini\Facades\Config;
+use Mini\Facades\File;
 use Mini\Facades\Hash;
-use Mini\Facades\Provider;
 use Mini\Facades\Request;
 use Mini\Facades\Response;
 use Mini\Facades\Session;
-use Mini\Filesystem\File;
 use Mini\Service\HttpMessage\Stream\SwooleStream;
 use Mini\Session\SessionServiceProvider;
 use Mini\Support\Str;
@@ -26,6 +25,7 @@ use Intervention\Image\ImageManager;
 use Mini\Facades\Cache;
 use Mini\Facades\Crypt;
 use MiniCaptcha\Exceptions\CaptchaException;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * Class Captcha
@@ -47,11 +47,6 @@ class Captcha
      * @var Image
      */
     protected Image $image;
-
-    /**
-     * @var string
-     */
-    protected string $captcha_key = '';
 
     /**
      * @var array
@@ -179,11 +174,11 @@ class Captcha
         $this->imageManager = app('image');
         $this->characters = config('captcha.characters', ['1', '2', '3', '4', '6', '7', '8', '9']);
         $this->fontsDirectory = config('captcha.fontsDirectory', dirname(__DIR__) . '/assets/fonts');
-        $backgrounds = \Mini\Facades\File::files(__DIR__ . '/../assets/backgrounds');
+        $backgrounds = File::files(__DIR__ . '/../assets/backgrounds');
         foreach ($backgrounds as $background) {
             $this->backgrounds[] = $background->getPathname();
         }
-        $fonts = \Mini\Facades\File::files($this->fontsDirectory);
+        $fonts = File::files($this->fontsDirectory);
         foreach ($fonts as $font) {
             $this->fonts[] = $font->getPathName();;
         }
@@ -206,12 +201,15 @@ class Captcha
     /**
      * Create captcha image
      *
+     * @param string $ck
      * @param string $config
-     * @param bool $api
-     * @return array|mixed
+     * @param bool $base64
+     * @return ResponseInterface|string
+     * @throws BindingResolutionException
+     * @throws CaptchaException
      * @throws Exception
      */
-    public function create(string $ck = '', string $config = 'default', bool $api = false)
+    public function create(string $ck = '', string $config = 'default', bool $base64 = false)
     {
         $this->configure($config);
 
@@ -251,28 +249,22 @@ class Captcha
             $this->image->blur($this->blur);
         }
 
-        if ($api) {
-            Cache::put($this->get_cache_key($generator['key'], $ck), $generator['value'], $this->expire);
-        }
-
-        return $api ? [
-            'sensitive' => $generator['sensitive'],
-            'key' => $generator['key'],
-            'img' => $this->image->encode('data-url')->encoded
-        ] : $this->response('png');
+        return $base64
+            ? $this->image->encode('data-url')->encoded
+            : $this->response();
     }
 
     /**
      * @param string $captcha_key
      * @return string
-     * @throws CaptchaException
+     * @throws CaptchaException|BindingResolutionException
      */
     public function getCk(string $captcha_key = ''): string
     {
         if ($captcha_key) {
             return $captcha_key;
         }
-        if (Provider::serviceProviderWasBooted(SessionServiceProvider::class)) {
+        if (app('providers')->serviceProviderWasBooted(SessionServiceProvider::class)) {
             $captcha_key = (string)Session::getId();
             if (!$captcha_key) {
                 throw new CaptchaException('create captcha: no session id');
@@ -288,15 +280,15 @@ class Captcha
 
     /**
      * @param string $format
-     * @return \Psr\Http\Message\ResponseInterface
+     * @return ResponseInterface
      */
-    protected function response(string $format = 'png'): \Psr\Http\Message\ResponseInterface
+    protected function response(string $format = 'png'): ResponseInterface
     {
         $this->image->encode($format, $this->quality);
         $data = $this->image->getEncoded();
         $mime = finfo_buffer(finfo_open(FILEINFO_MIME_TYPE), $data);
         $length = strlen($data);
-        return Response::withAddedHeader('Content-Type', $mime)->withAddedHeader('Content-Length', $length)->withBody(new SwooleStream((string)$data));
+        return Response::withAddedHeader('Content-Type', $mime)->withAddedHeader('Content-Length', $length)->withBody(new SwooleStream($data));
     }
 
     /**
@@ -314,7 +306,8 @@ class Captcha
      * Generate captcha text
      * @param string $ck
      * @return array
-     * @throws CaptchaException
+     * @throws CaptchaException|BindingResolutionException
+     * @throws Exception
      */
     protected function generate(string $ck = ''): array
     {
@@ -341,7 +334,7 @@ class Captcha
             $hash = Crypt::encrypt($hash);
         }
 
-        Cache::put('captcha.' . $this->getCk($ck), [
+        Cache::put($this->get_cache_key($ck), [
             'sensitive' => $this->sensitive,
             'key' => $hash,
             'encrypt' => $this->encrypt
@@ -461,12 +454,15 @@ class Captcha
      * Captcha check
      *
      * @param string $value
+     * @param string $ck
+     * @param bool $removeSession
      * @return bool
+     * @throws BindingResolutionException
+     * @throws CaptchaException
      */
-    public function check(string $value, string $ck = ''): bool
+    public function check(string $value, string $ck = '', bool $removeSession = true): bool
     {
-        $captcha_key = $this->getCk($ck);
-        if (!$cache = Cache::get('captcha.' . $captcha_key)) {
+        if (!$cache = Cache::get($this->get_cache_key($ck))) {
             return false;
         }
 
@@ -483,8 +479,8 @@ class Captcha
         }
         $check = Hash::check($value, $key);
         // if verify pass,remove session
-        if ($check) {
-            Cache::delete('captcha.' . $captcha_key);
+        if ($removeSession && $check) {
+            Cache::delete($this->get_cache_key($ck));
         }
 
         return $check;
@@ -492,39 +488,14 @@ class Captcha
 
     /**
      * Returns the md5 short version of the key for cache
-     * @param string $key
      * @param string $ck
      * @return string
+     * @throws BindingResolutionException
      * @throws CaptchaException
      */
-    protected function get_cache_key(string $key, string $ck = ''): string
+    protected function get_cache_key(string $ck = ''): string
     {
-        return 'captcha.' . $this->getCk($ck) . '.' . md5($key);
-    }
-
-    /**
-     * Captcha check
-     *
-     * @param string $value
-     * @param string $key
-     * @param string $config
-     * @return bool
-     */
-    public function check_api(string $value, string $key, string $ck = '', string $config = 'default'): bool
-    {
-        if (!Cache::pull($this->get_cache_key($key, $ck))) {
-            return false;
-        }
-
-        $this->configure($config);
-
-        if (!$this->sensitive) {
-            $value = Str::lower($value);
-        }
-        if ($this->encrypt) {
-            $key = Crypt::decrypt($key);
-        }
-        return Hash::check($value, $key);
+        return 'captcha.' . $this->getCk($ck);
     }
 
     /**
@@ -542,6 +513,7 @@ class Captcha
     /**
      * Generate captcha image html tag
      *
+     * @param string $ck
      * @param string $config
      * @param array $attrs
      * $attrs -> HTML attributes supplied to the image tag where key is the attribute and the value is the attribute value

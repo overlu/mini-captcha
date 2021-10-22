@@ -8,8 +8,9 @@
 		"php": "^7.4",
 		"ext-gd": "*",
 		"overlu/mini-framework": "~2.12.0",
-		"overlu/mini-image": "~1.0"
-	},
+		"overlu/mini-image": "~1.0",
+		"ext-fileinfo": "*"
+    },
 	"autoload": {
 		"psr-4": {
 			"MiniCaptcha\\": "src/"

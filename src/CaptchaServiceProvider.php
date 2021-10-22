@@ -32,14 +32,13 @@ class CaptchaServiceProvider extends ServiceProvider
         ], 'config');
 
         RouteService::registerHttpRoute([
-            'GET', 'captcha/api[/{config}]', '\MiniCaptcha\CaptchaController@getCaptchaApi'
+            'GET', 'captcha/base64[/{config}]', '\MiniCaptcha\CaptchaController@getCaptchaBase64'
         ]);
         RouteService::registerHttpRoute([
             'GET', 'captcha[/{config}]', '\MiniCaptcha\CaptchaController@getCaptcha'
         ]);
 
         Validator::addValidator('captcha', new \MiniCaptcha\Rules\Captcha());
-        Validator::addValidator('captcha_api', new CaptchaApi());
     }
 
     /**
@@ -57,7 +56,7 @@ class CaptchaServiceProvider extends ServiceProvider
         );
 
         // Bind captcha
-        $this->app->bind('captcha', function ($app) {
+        $this->app->singleton('captcha', function () {
             return new Captcha();
         });
     }
