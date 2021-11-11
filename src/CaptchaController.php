@@ -24,7 +24,7 @@ class CaptchaController
      * @return ResponseInterface
      * @throws Exception
      */
-    public function getCaptcha(Captcha $captcha, string $config = 'default'): ResponseInterface
+    public function getCaptcha(Captcha $captcha, $config = 'default'): ResponseInterface
     {
         return $captcha->create(\MiniCaptcha\Facades\Captcha::getCk(), $config);
     }
@@ -37,7 +37,7 @@ class CaptchaController
      * @return string
      * @throws Exception
      */
-    public function getCaptchaBase64(Captcha $captcha, string $config = 'default'): string
+    public function getCaptchaBase64(Captcha $captcha, $config = 'default'): string
     {
         return $captcha->create(\MiniCaptcha\Facades\Captcha::getCk(), $config, true);
     }
