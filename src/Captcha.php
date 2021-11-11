@@ -265,14 +265,14 @@ class Captcha
             return $captcha_key;
         }
         if (app('providers')->serviceProviderWasBooted(SessionServiceProvider::class)) {
-            $captcha_key = (string)Session::getId();
+            $captcha_key = Session::getId();
             if (!$captcha_key) {
                 throw new CaptchaException('create captcha: no session id');
             }
         } else {
             $captcha_key = (string)Request::header('ck', Request::input('ck'));
             if (!$captcha_key) {
-                throw new CaptchaException('create captcha: no [ck] param');
+                $captcha_key = Request::ip();
             }
         }
         return $captcha_key;
