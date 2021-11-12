@@ -11,7 +11,6 @@ use Mini\Contracts\Container\BindingResolutionException;
 use Mini\Facades\Validator;
 use Mini\Service\HttpServer\RouteService;
 use Mini\Support\ServiceProvider;
-use MiniCaptcha\Rules\CaptchaApi;
 
 /**
  * Class CaptchaServiceProvider
