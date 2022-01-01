@@ -28,6 +28,9 @@ class Captcha extends Rule
      */
     public function check($value): bool
     {
+        if (!is_string($value)) {
+            return false;
+        }
         $acceptable = ['yes', 'on', '1', 1, true, 'true'];
         $removeSession = $this->parameter('removeSession', true);
         return captcha_check($value, $this->parameter('ck', ''), in_array($removeSession, $acceptable, true));
