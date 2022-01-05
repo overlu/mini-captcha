@@ -9,7 +9,6 @@ namespace MiniCaptcha;
 
 use Mini\Contracts\Container\BindingResolutionException;
 use Mini\Facades\Validator;
-use Mini\Service\HttpServer\RouteService;
 use Mini\Support\ServiceProvider;
 
 /**
@@ -30,10 +29,10 @@ class CaptchaServiceProvider extends ServiceProvider
             __DIR__ . '/../config/captcha.php' => config_path('captcha.php')
         ], 'config');
 
-        RouteService::registerHttpRoute([
+        $this->app['route']->registerHttpRoute([
             'GET', 'captcha/base64[/{config}]', '\MiniCaptcha\CaptchaController@getCaptchaBase64'
         ]);
-        RouteService::registerHttpRoute([
+        $this->app['route']->registerHttpRoute([
             'GET', 'captcha[/{config}]', '\MiniCaptcha\CaptchaController@getCaptcha'
         ]);
 
