@@ -264,18 +264,14 @@ class Captcha
         if ($captcha_key) {
             return $captcha_key;
         }
-        if (app('providers')->serviceProviderWasBooted(SessionServiceProvider::class)) {
-            $captcha_key = Session::getId();
-            if (!$captcha_key) {
-                throw new CaptchaException('create captcha: no session id');
-            }
-        } else {
-            $captcha_key = (string)Request::header('ck', Request::input('ck'));
-            if (!$captcha_key) {
-                $captcha_key = Request::ip();
-            }
+        $captcha_key = (string)Request::header('ck', Request::input('ck'));
+        if ($captcha_key) {
+            return $captcha_key;
         }
-        return $captcha_key;
+        if (app('providers')->serviceProviderWasBooted(SessionServiceProvider::class) && $captcha_key = Session::getId()) {
+            return $captcha_key;
+        }
+        return Request::ip();
     }
 
     /**
