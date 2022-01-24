@@ -268,9 +268,9 @@ class Captcha
         if ($captcha_key) {
             return $captcha_key;
         }
-        if (app('providers')->serviceProviderWasBooted(SessionServiceProvider::class) && $captcha_key = Session::getId()) {
+        /*if (app('providers')->serviceProviderWasBooted(SessionServiceProvider::class) && $captcha_key = Session::getId()) {
             return $captcha_key;
-        }
+        }*/
         return Request::ip();
     }
 
